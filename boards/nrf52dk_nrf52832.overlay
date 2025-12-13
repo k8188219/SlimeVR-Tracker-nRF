@@ -77,9 +77,9 @@ arduino_spi: &spi2 {
 	status = "okay";
 	current-speed = <115200>;
     
-    // --- 新增 pinctrl 配置 (指向下面定義的 pinctrl_uart0_default) ---
     pinctrl-0 = <&pinctrl_uart0_default>;
-	pinctrl-names = "default";
+	pinctrl-1 = <&pinctrl_uart0_sleep>;
+	pinctrl-names = "default", "sleep";
 };
 
 // --- 在 &pinctrl (通常是 GPIO 節點) 中定義引腳 ---
@@ -88,6 +88,13 @@ arduino_spi: &spi2 {
 		group {
 			psels = <NRF_PSEL(UART_TX, 0, 24)>, 
 					<NRF_PSEL(UART_RX, 0, 20)>;
+		};
+	};
+	pinctrl_uart0_sleep: uart0_sleep {
+		group {
+			psels = <NRF_PSEL(UART_TX, 0, 24)>, 
+					<NRF_PSEL(UART_RX, 0, 20)>;
+			low-power-enable;
 		};
 	};
 };
