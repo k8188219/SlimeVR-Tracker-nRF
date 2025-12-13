@@ -10,13 +10,21 @@
 #if CONFIG_USB_DEVICE_STACK
 #define USB DT_NODELABEL(usbd)
 #define USB_EXISTS (DT_NODE_HAS_STATUS(USB, okay) && CONFIG_UART_CONSOLE)
+#else
+#define CONFIG_UART_CONSOLE_DIRECT CONFIG_UART_CONSOLE
 #endif
 
-#if (USB_EXISTS || CONFIG_RTT_CONSOLE) && CONFIG_USE_SLIMENRF_CONSOLE
+#if (USB_EXISTS || CONFIG_RTT_CONSOLE || CONFIG_UART_CONSOLE_DIRECT) && CONFIG_USE_SLIMENRF_CONSOLE
 
 #if USB_EXISTS
 #include <zephyr/console/console.h>
 #include <zephyr/logging/log_ctrl.h>
+#elif CONFIG_UART_CONSOLE_DIRECT
+#include <zephyr/drivers/uart.h>
+#include <zephyr/kernel.h>
+static const struct device *uart_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
+static char uart_line_buffer[128];
+static uint16_t uart_line_pos = 0;
 #else
 #include "system/rtt_console.h"
 #endif
@@ -413,6 +421,30 @@ static void console_thread(void)
 	while (1) {
 #if USB_EXISTS
 		char *line = console_getline();
+#elif CONFIG_UART_CONSOLE_DIRECT
+		uart_line_pos = 0;
+		while (uart_line_pos < sizeof(uart_line_buffer) - 1) {
+			uint8_t c;
+			if (uart_poll_in(uart_dev, &c) == 0) {
+				if (c == '\r' || c == '\n') {
+					uart_line_buffer[uart_line_pos] = '\0';
+					uart_poll_out(uart_dev, '\n');
+					break;
+				} else if (c == '\b' || c == 127) {
+					if (uart_line_pos > 0) {
+						uart_line_pos--;
+						uart_poll_out(uart_dev, '\b');
+						uart_poll_out(uart_dev, ' ');
+						uart_poll_out(uart_dev, '\b');
+					}
+				} else if (c >= 32 && c < 127) {
+					uart_line_buffer[uart_line_pos++] = c;
+					uart_poll_out(uart_dev, c);
+				}
+			}
+			k_usleep(100);
+		}
+		char *line = uart_line_buffer;
 #else
 		char *line = rtt_console_getline();
 #endif

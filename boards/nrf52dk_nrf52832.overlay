@@ -17,6 +17,10 @@
 };
 
 / {
+	chosen {
+		zephyr,console = &uart0;
+		zephyr,shell-uart = &uart0;
+	};
 	pwmleds {
 		pwm_led1: pwm_led_1 {
 			pwms = <&pwm0 1 PWM_MSEC(20) PWM_POLARITY_INVERTED>;
@@ -67,4 +71,11 @@ arduino_spi: &spi2 {
 		label = "imu-spi";
 		reg = <0>;
 	};
+};
+
+&uart0 {
+	status = "okay";
+	current-speed = <115200>;
+	tx-pin = <24>; /* P0.24 */
+	rx-pin = <20>; /* P0.20 */
 };
