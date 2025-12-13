@@ -1,8 +1,0 @@
-description: "Project-local overlay for nordic,nrf-uarte binding to accept tx/rx pin properties"
-properties:
-  tx-pin:
-    description: "Transmit pin number (GPIO)"
-    type: integer
-  rx-pin:
-    description: "Receive pin number (GPIO)"
-    type: integer

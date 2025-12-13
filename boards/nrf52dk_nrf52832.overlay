@@ -76,6 +76,18 @@ arduino_spi: &spi2 {
 &uart0 {
 	status = "okay";
 	current-speed = <115200>;
-	tx-pin = <24>; /* P0.24 */
-	rx-pin = <20>; /* P0.20 */
+    
+    // --- 新增 pinctrl 配置 (指向下面定義的 pinctrl_uart0_default) ---
+    pinctrl-0 = <&pinctrl_uart0_default>;
+	pinctrl-names = "default";
+};
+
+// --- 在 &pinctrl (通常是 GPIO 節點) 中定義引腳 ---
+&pinctrl {
+	pinctrl_uart0_default: uart0_default {
+		group {
+			psels = <NRF_PSEL(UART_TX, 0, 24)>, 
+					<NRF_PSEL(UART_RX, 0, 20)>;
+		};
+	};
 };
