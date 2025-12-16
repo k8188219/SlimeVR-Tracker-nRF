@@ -345,13 +345,11 @@ static void console_thread(void)
 	}
 #endif
 
-#if USB_EXISTS
 	console_getline_init();
 	while (log_data_pending())
 		k_usleep(1);
 	k_msleep(100);
 	printk("*** " CONFIG_USB_DEVICE_MANUFACTURER " " CONFIG_USB_DEVICE_PRODUCT " ***\n");
-#endif
 	printk(FW_STRING);
 	printk("info                         Get device information\n");
 	printk("uptime                       Get device uptime\n");
