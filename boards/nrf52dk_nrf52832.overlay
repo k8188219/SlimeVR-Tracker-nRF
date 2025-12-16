@@ -19,7 +19,6 @@
 / {
 	chosen {
 		zephyr,console = &uart0;
-		zephyr,shell-uart = &uart0;
 	};
 	pwmleds {
 		pwm_led1: pwm_led_1 {
