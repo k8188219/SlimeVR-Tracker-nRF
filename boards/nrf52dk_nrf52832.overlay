@@ -74,6 +74,7 @@ arduino_spi: &spi2 {
 };
 
 &uart0 {
+	compatible = "nordic,nrf-uart";
 	status = "okay";
 	current-speed = <115200>;
     
