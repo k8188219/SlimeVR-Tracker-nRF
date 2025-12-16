@@ -1,133 +1,75 @@
 /*
-	SlimeVR Code is placed under the MIT license
-	Copyright (c) 2025 SlimeVR Contributors
+ * Copyright (c) 2024 Zephyr Console Example
+ * Target: nRF52832
+ */
 
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
+#include <zephyr/kernel.h>
+#include <zephyr/sys/printk.h>
+#include <zephyr/console/console.h> /* 引入 Console 子系統 */
 
-	The above copyright notice and this permission notice shall be included in
-	all copies or substantial portions of the Software.
+/* 設定執行緒堆疊大小與優先權 */
+#define STACK_SIZE 1024
+#define THREAD_PRIORITY 7
 
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-	THE SOFTWARE.
-*/
-#include "globals.h"
-#include "system/system.h"
-//#include "timer.h"
-#include "connection/esb.h"
-#include "sensor/sensor.h"
+/* 定義執行緒堆疊區與結構 */
+K_THREAD_STACK_DEFINE(input_stack_area, STACK_SIZE);
+struct k_thread input_thread_data;
 
-#include <zephyr/sys/reboot.h>
+/* * 輸入處理執行緒
+ * 負責透過 console_getline 讀取資料並處理
+ */
+void input_thread_entry(void *p1, void *p2, void *p3)
+{
+	printk("[Input Thread] 啟動，等待輸入...\n");
 
-#define DFU_DBL_RESET_MEM 0x20007F7C
-#define DFU_DBL_RESET_APP 0x4ee5677e
+	/* 初始化 console_getline 功能 */
+	console_getline_init();
 
-static uint32_t *dbl_reset_mem __attribute__((unused)) = ((uint32_t *)DFU_DBL_RESET_MEM); // retained
+	while (1) {
+		/* 提示符號 */
+		printk("Zephyr> ");
 
-LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
+		/* * console_getline() 是一個阻塞函數 (Blocking Call)
+		 * 它會讓此執行緒進入休眠，直到使用者輸入一行文字並按下 Enter
+		 * 這樣不會佔用 CPU 資源
+		 */
+		char *s = console_getline();
 
-#if DT_NODE_HAS_PROP(DT_ALIAS(sw0), gpios)
-#define BUTTON_EXISTS true
-#endif
-
-#define DFU_EXISTS CONFIG_BUILD_OUTPUT_UF2 || CONFIG_BOARD_HAS_NRF5_BOOTLOADER
-#define ADAFRUIT_BOOTLOADER CONFIG_BUILD_OUTPUT_UF2
+		/* 收到輸入後的處理 */
+		printk("\n[Input Thread] 您輸入了: %s\n", s);
+		
+		/* 簡單的指令判斷範例 */
+		if (strcmp(s, "hello") == 0) {
+			printk("-> World!\n");
+		} else if (strcmp(s, "help") == 0) {
+			printk("-> 支援指令: hello, help\n");
+		}
+	}
+}
 
 int main(void)
 {
-#if IGNORE_RESET && BUTTON_EXISTS
-	bool reset_pin_reset = false;
-#else
-#ifdef NRF_RESET
-	bool reset_pin_reset = NRF_RESET->RESETREAS & RESET_RESETREAS_RESETPIN_Msk;
-	NRF_RESET->RESETREAS = NRF_RESET->RESETREAS; // Clear RESETREAS
-#else
-	bool reset_pin_reset = NRF_POWER->RESETREAS & POWER_RESETREAS_RESETPIN_Msk;
-	NRF_POWER->RESETREAS = NRF_POWER->RESETREAS; // Clear RESETREAS
-#endif
-#endif
+	printk("[Main] 系統啟動\n");
 
-	set_led(SYS_LED_PATTERN_ON, SYS_LED_PRIORITY_BOOT); // Boot LED
-
-	uint8_t reboot_counter = reboot_counter_read();
-	bool booting_from_shutdown = !reboot_counter && (reset_pin_reset || button_read()); // 0 means from user shutdown or failed ram validation
-
-	/* if button is not held after booting from shutdown, power off again
-	 * if button press is normal, continue boot
-	 * if button is held for 5 seconds, reset pairing and continue boot
+	/* * 建立並啟動輸入處理執行緒
+	 * 這樣輸入邏輯就與主程式邏輯分開了
 	 */
+	k_tid_t my_tid = k_thread_create(&input_thread_data, input_stack_area,
+					 K_THREAD_STACK_SIZEOF(input_stack_area),
+					 input_thread_entry,
+					 NULL, NULL, NULL,
+					 THREAD_PRIORITY, 0, K_NO_WAIT);
 
-	if (button_read())
-	{
-		while (button_read())
-		{
-			if (k_uptime_get() > 1000)
-				set_led(SYS_LED_PATTERN_LONG, SYS_LED_PRIORITY_HIGHEST);
-			if (k_uptime_get() > 5000)
-			{
-				LOG_INF("Pairing requested");
-				esb_reset_pair();
-				break;
-			}
-			k_msleep(1);
-		}
-#if USER_SHUTDOWN_ENABLED
-		if (k_uptime_get() < 50 && booting_from_shutdown) // debounce
-			sys_request_system_off(false);
-#endif
-		if (k_uptime_get() <= 5000)
-			set_led(SYS_LED_PATTERN_ONESHOT_POWERON, SYS_LED_PRIORITY_HIGHEST);
-		else
-			set_led(SYS_LED_PATTERN_OFF, SYS_LED_PRIORITY_HIGHEST);
+	/* * 主執行緒 (Main Thread) 迴圈
+	 * 這裡模擬系統的其他工作（例如讀取感測器、閃爍 LED 等）
+	 * 證明 console_getline 不會卡住整個系統
+	 */
+	int count = 0;
+	while (1) {
+		/* 每 5 秒印出一條訊息，證明主執行緒仍在運作 */
+		// printk("[Main] 系統運作中... (%d)\n", ++count);
+		k_sleep(K_SECONDS(5));
 	}
-	else if (booting_from_shutdown)
-		set_led(SYS_LED_PATTERN_ONESHOT_POWERON, SYS_LED_PRIORITY_BOOT);
-
-	bool docked = dock_read();
-
-	uint8_t reset_mode = -1;
-
-	if (reboot_counter == 0)
-		reboot_counter = 100;
-	else if (reboot_counter > 200)
-		reboot_counter = 200; // How did you get here
-	reset_mode = reboot_counter - 100;
-	if (reset_pin_reset && !docked) // Count pin resets while not docked
-	{
-		reboot_counter++;
-		reboot_counter_write(reboot_counter);
-		LOG_INF("Reset count: %u", reboot_counter);
-#if ADAFRUIT_BOOTLOADER && !(IGNORE_RESET && BUTTON_EXISTS) // Using Adafruit bootloader, skip DFU if reset button is in use
-		(*dbl_reset_mem) = DFU_DBL_RESET_APP; // Skip DFU
-#endif
-		k_msleep(1000); // Wait before clearing counter and continuing
-	}
-	reboot_counter_write(100);
-	if (!reset_pin_reset && reset_mode == 0) // Only need to check once, if the button is pressed again an interrupt is triggered from before
-		reset_mode = -1; // Cancel reset_mode (shutdown)
-
-#if USER_SHUTDOWN_ENABLED
-	bool charging = chg_read();
-	bool charged = stby_read();
-	bool plugged = vin_read();
-
-	if (reset_mode == 0 && !booting_from_shutdown && !charging && !charged && !plugged) // Reset mode user shutdown, only if unplugged and undocked
-		sys_user_shutdown();
-#endif
-
-	if (!booting_from_shutdown) // ONESHOT_POWERON automatically sets LED off
-		set_led(SYS_LED_PATTERN_OFF, SYS_LED_PRIORITY_BOOT);
-
-	sys_reset_mode(reset_mode);
-
+	
 	return 0;
 }
