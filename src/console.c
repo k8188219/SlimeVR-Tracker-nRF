@@ -20,7 +20,8 @@
 #include <zephyr/console/console.h>
 #include <zephyr/logging/log_ctrl.h>
 #elif CONFIG_UART_CONSOLE_DIRECT
-static uint16_t uart_line_pos = 0;
+#include <zephyr/console/console.h>
+#include <zephyr/logging/log_ctrl.h>
 #else
 #include "system/rtt_console.h"
 #endif
